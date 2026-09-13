@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "MenuItem" ADD COLUMN     "portionSize" DOUBLE PRECISION NOT NULL DEFAULT 1.0;
