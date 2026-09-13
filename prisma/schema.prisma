@@ -7,9 +7,136 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//////////////////////////////////////////////////////
-// ENUMS
-//////////////////////////////////////////////////////
+model User {
+  id                   String           @id @default(uuid())
+  name                 String
+  email                String           @unique
+  password             String
+  role                 UserRole         @default(USER)
+  createdAt            DateTime         @default(now())
+  avatarUrl            String?
+  status               UserStatus       @default(ACTIVE)
+  updatedAt            DateTime         @updatedAt
+  creatorConversations Conversation[]   @relation("CreatorConversations")
+  userConversations    Conversation[]   @relation("UserConversations")
+  earnings             CreatorEarning[]
+  creatorProfile       CreatorProfile?
+  receivedMessages     Message[]        @relation("ReceivedMessages")
+  sentMessages         Message[]        @relation("SentMessages")
+  payments             Payment[]
+  chatMessages         ChatMessage[]    @relation("ChatMessageSender")
+
+  @@index([email])
+  @@index([role])
+}
+
+model CreatorProfile {
+  id           String        @id @default(uuid())
+  userId       String        @unique
+  username     String        @unique
+  bio          String?
+  category     String?
+  replyPrice   Decimal       @db.Decimal(10, 2)
+  currency     String        @default("USD")
+  status       CreatorStatus @default(PENDING)
+  profileImage String?
+  totalReplies Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@index([username])
+  @@index([status])
+}
+
+model Conversation {
+  id        String        @id @default(uuid())
+  userId    String
+  creatorId String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+  creator   User          @relation("CreatorConversations", fields: [creatorId], references: [id], onDelete: Cascade)
+  user      User          @relation("UserConversations", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, creatorId])
+  @@index([userId])
+  @@index([creatorId])
+}
+
+model Message {
+  id               String         @id @default(uuid())
+  senderId         String
+  creatorId        String
+  creatorProfileId String
+  content          String
+  status           MessageStatus  @default(PENDING_PAYMENT)
+  expiresAt        DateTime?
+  repliedAt        DateTime?
+  declinedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  replyContent     String?
+  creator          User           @relation("ReceivedMessages", fields: [creatorId], references: [id], onDelete: Cascade)
+  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id])
+  sender           User           @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  payment          Payment?
+
+  @@index([senderId])
+  @@index([creatorId])
+  @@index([creatorProfileId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model ChatMessage {
+  id String @id @default(uuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  content String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  userId                String
+  messageId             String        @unique
+  amount                Decimal       @db.Decimal(10, 2)
+  currency              String        @default("USD")
+  status                PaymentStatus @default(PENDING)
+  stripePaymentIntentId String?       @unique
+  stripeChargeId        String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  message               Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model CreatorEarning {
+  id          String   @id @default(uuid())
+  creatorId   String
+  messageId   String   @unique
+  amount      Decimal  @db.Decimal(10, 2)
+  platformFee Decimal  @db.Decimal(10, 2)
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([creatorId])
+}
 
 enum UserRole {
   USER
@@ -44,197 +171,4 @@ enum PaymentStatus {
   SUCCEEDED
   FAILED
   REFUNDED
-}
-
-//////////////////////////////////////////////////////
-// USER
-//////////////////////////////////////////////////////
-
-model User {
-  id       String @id @default(uuid())
-  name     String
-  email    String @unique
-  password String
-
-  role   UserRole   @default(USER)
-  status UserStatus @default(ACTIVE)
-
-  avatarUrl String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  creatorProfile CreatorProfile?
-
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-
-  payments Payment[]
-
-  userConversations    Conversation[] @relation("UserConversations")
-  creatorConversations Conversation[] @relation("CreatorConversations")
-
-  earnings CreatorEarning[]
-
-  @@index([email])
-  @@index([role])
-}
-
-//////////////////////////////////////////////////////
-// CREATOR PROFILE
-//////////////////////////////////////////////////////
-
-model CreatorProfile {
-  id String @id @default(uuid())
-
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  username String  @unique
-  bio      String?
-  category String?
-
-  replyPrice Decimal @db.Decimal(10, 2)
-  currency   String  @default("USD")
-
-  status CreatorStatus @default(PENDING)
-
-  profileImage String?
-
-  totalReplies Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  messages Message[]
-
-  @@index([username])
-  @@index([status])
-}
-
-//////////////////////////////////////////////////////
-// CONVERSATION
-//////////////////////////////////////////////////////
-
-model Conversation {
-  id String @id @default(uuid())
-
-  userId    String
-  creatorId String
-
-  user    User @relation("UserConversations", fields: [userId], references: [id], onDelete: Cascade)
-  creator User @relation("CreatorConversations", fields: [creatorId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  messages ChatMessage[]
-
-  @@unique([userId, creatorId])
-  @@index([userId])
-  @@index([creatorId])
-}
-
-//////////////////////////////////////////////////////
-// PAID MESSAGE REQUEST
-//////////////////////////////////////////////////////
-
-model Message {
-  id String @id @default(uuid())
-
-  senderId String
-  sender   User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-
-  creatorId String
-  creator   User   @relation("ReceivedMessages", fields: [creatorId], references: [id], onDelete: Cascade)
-
-  creatorProfileId String
-  creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id])
-
-  content String @db.Text
-  replyContent     String?        @db.Text
-  status MessageStatus @default(PENDING_PAYMENT)
-
-  expiresAt  DateTime?
-  repliedAt  DateTime?
-  declinedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  payment Payment?
-
-  @@index([senderId])
-  @@index([creatorId])
-  @@index([creatorProfileId])
-  @@index([status])
-  @@index([expiresAt])
-}
-
-//////////////////////////////////////////////////////
-// CHAT MESSAGE
-//////////////////////////////////////////////////////
-
-model ChatMessage {
-  id String @id @default(uuid())
-
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  senderId String
-  content  String @db.Text
-
-  createdAt DateTime @default(now())
-
-  @@index([conversationId])
-}
-
-//////////////////////////////////////////////////////
-// PAYMENT
-//////////////////////////////////////////////////////
-
-model Payment {
-  id String @id @default(uuid())
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  messageId String  @unique
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  amount   Decimal @db.Decimal(10, 2)
-  currency String  @default("USD")
-
-  status PaymentStatus @default(PENDING)
-
-  stripePaymentIntentId String? @unique
-  stripeChargeId        String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@index([status])
-}
-
-//////////////////////////////////////////////////////
-// CREATOR EARNINGS
-//////////////////////////////////////////////////////
-
-model CreatorEarning {
-  id String @id @default(uuid())
-
-  creatorId String
-  creator   User   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-
-  messageId String @unique
-
-  amount      Decimal @db.Decimal(10, 2)
-  platformFee Decimal @db.Decimal(10, 2)
-
-  status String @default("PENDING")
-
-  createdAt DateTime @default(now())
-
-  @@index([creatorId])
 }

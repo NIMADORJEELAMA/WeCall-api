@@ -11,14 +11,14 @@ async function main() {
     where: { email: 'admin@admin.com' },
     update: {
       password: hashedPassword,
-      isActive: true,
+      status: 'ACTIVE',
     },
     create: {
       email: 'admin@admin.com',
       name: 'System Admin',
       password: hashedPassword,
       role: 'ADMIN',
-      isActive: true,
+      status: 'ACTIVE',
     },
   });
 

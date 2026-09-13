@@ -384,6 +384,17 @@ export class PaymentsService {
         status: result.message.status,
       },
     );
+
+    // ============================================================
+    // 🔥 PAYMENT SUCCESS → USER
+    // ============================================================
+
+    this.eventsGateway.emitToUser(result.message.senderId, 'paymentSucceeded', {
+      messageId: result.message.id,
+      paymentId: result.payment.id,
+      conversationId: result.conversation.id,
+      status: result.message.status,
+    });
   }
 
   // ============================================================

@@ -207,29 +207,33 @@ export class MessagesService {
   async getMyConversations(userId: string) {
     const conversations = await this.prisma.conversation.findMany({
       where: {
-        userId: userId,
-
-        // Only show conversations that actually have chat messages
+        OR: [
+          {
+            userId,
+          },
+          {
+            creatorId: userId,
+          },
+        ],
         messages: {
           some: {},
         },
       },
 
       include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+
         creator: {
           select: {
             id: true,
             name: true,
             avatarUrl: true,
-
-            creatorProfile: {
-              select: {
-                username: true,
-                category: true,
-                replyPrice: true,
-                profileImage: true,
-              },
-            },
           },
         },
 
@@ -238,11 +242,10 @@ export class MessagesService {
             createdAt: 'desc',
           },
           take: 1,
-
           select: {
             id: true,
-            senderId: true,
             content: true,
+            senderId: true,
             createdAt: true,
           },
         },
@@ -253,16 +256,94 @@ export class MessagesService {
       },
     });
 
-    return conversations.map((conversation) => ({
-      id: conversation.id,
+    return conversations.map((conversation) => {
+      const isCreator = conversation.creatorId === userId;
 
-      creator: conversation.creator,
+      const participant = isCreator ? conversation.user : conversation.creator;
 
-      latestMessage: conversation.messages[0] ?? null,
+      const latestMessage = conversation.messages[0] ?? null;
 
-      updatedAt: conversation.updatedAt,
-    }));
+      return {
+        id: conversation.id,
+
+        // Useful for frontend
+        conversationId: conversation.id,
+
+        participant: {
+          id: participant.id,
+          name: participant.name,
+          avatarUrl: participant.avatarUrl,
+        },
+
+        latestMessage,
+
+        updatedAt: conversation.updatedAt,
+
+        // Useful for deciding whether current
+        // authenticated user is creator/user
+        role: isCreator ? 'CREATOR' : 'USER',
+      };
+    });
   }
+  // async getMyConversations(userId: string) {
+  //   const conversations = await this.prisma.conversation.findMany({
+  //     where: {
+  //       userId: userId,
+
+  //       // Only show conversations that actually have chat messages
+  //       messages: {
+  //         some: {},
+  //       },
+  //     },
+
+  //     include: {
+  //       creator: {
+  //         select: {
+  //           id: true,
+  //           name: true,
+  //           avatarUrl: true,
+
+  //           creatorProfile: {
+  //             select: {
+  //               username: true,
+  //               category: true,
+  //               replyPrice: true,
+  //               profileImage: true,
+  //             },
+  //           },
+  //         },
+  //       },
+
+  //       messages: {
+  //         orderBy: {
+  //           createdAt: 'desc',
+  //         },
+  //         take: 1,
+
+  //         select: {
+  //           id: true,
+  //           senderId: true,
+  //           content: true,
+  //           createdAt: true,
+  //         },
+  //       },
+  //     },
+
+  //     orderBy: {
+  //       updatedAt: 'desc',
+  //     },
+  //   });
+
+  //   return conversations.map((conversation) => ({
+  //     id: conversation.id,
+
+  //     creator: conversation.creator,
+
+  //     latestMessage: conversation.messages[0] ?? null,
+
+  //     updatedAt: conversation.updatedAt,
+  //   }));
+  // }
   async sendPaidChat(senderId: string, creatorId: string, content: string) {
     if (!content?.trim()) {
       throw new BadRequestException('Message cannot be empty');
@@ -649,5 +730,105 @@ export class MessagesService {
       conversationId: conversation.id,
       chatMessage: result.chatMessage,
     };
+  }
+
+  /**
+   * Get all chat messages for a conversation.
+   * The authenticated user must be a member of the conversation.
+   */
+  async getConversationMessages(userId: string, conversationId: string) {
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        OR: [{ userId }, { creatorId: userId }],
+      },
+      select: {
+        id: true,
+        userId: true,
+        creatorId: true,
+      },
+    });
+
+    if (!conversation) {
+      throw new ForbiddenException('You are not a member of this conversation');
+    }
+
+    const messages = await this.prisma.chatMessage.findMany({
+      where: {
+        conversationId,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    return {
+      conversationId: conversation.id,
+      userId: conversation.userId,
+      creatorId: conversation.creatorId,
+      messages,
+    };
+  }
+  /**
+   * Create a conversation between a user and creator,
+   * or return the existing conversation.
+   */
+  async createOrGetConversation(userId: string, creatorId: string) {
+    if (userId === creatorId) {
+      throw new BadRequestException(
+        'You cannot create a conversation with yourself',
+      );
+    }
+
+    // Verify creator exists
+    const creator = await this.prisma.user.findUnique({
+      where: {
+        id: creatorId,
+      },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        role: true,
+      },
+    });
+
+    if (!creator) {
+      throw new NotFoundException('Creator not found');
+    }
+
+    const conversation = await this.prisma.conversation.upsert({
+      where: {
+        userId_creatorId: {
+          userId,
+          creatorId,
+        },
+      },
+      create: {
+        userId,
+        creatorId,
+      },
+      update: {},
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    return conversation;
   }
 }
