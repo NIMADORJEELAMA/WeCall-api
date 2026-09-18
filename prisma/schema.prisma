@@ -8,23 +8,25 @@ datasource db {
 }
 
 model User {
-  id                   String           @id @default(uuid())
-  name                 String
-  email                String           @unique
-  password             String
-  role                 UserRole         @default(USER)
-  createdAt            DateTime         @default(now())
-  avatarUrl            String?
-  status               UserStatus       @default(ACTIVE)
-  updatedAt            DateTime         @updatedAt
-  creatorConversations Conversation[]   @relation("CreatorConversations")
-  userConversations    Conversation[]   @relation("UserConversations")
-  earnings             CreatorEarning[]
-  creatorProfile       CreatorProfile?
-  receivedMessages     Message[]        @relation("ReceivedMessages")
-  sentMessages         Message[]        @relation("SentMessages")
-  payments             Payment[]
-  chatMessages         ChatMessage[]    @relation("ChatMessageSender")
+  id                          String               @id @default(uuid())
+  name                        String
+  email                       String               @unique
+  password                    String
+  role                        UserRole             @default(USER)
+  createdAt                   DateTime             @default(now())
+  avatarUrl                   String?
+  status                      UserStatus           @default(ACTIVE)
+  updatedAt                   DateTime             @updatedAt
+  creatorConversations        Conversation[]       @relation("CreatorConversations")
+  userConversations           Conversation[]       @relation("UserConversations")
+  earnings                    CreatorEarning[]
+  creatorProfile              CreatorProfile?
+  receivedMessages            Message[]            @relation("ReceivedMessages")
+  sentMessages                Message[]            @relation("SentMessages")
+  payments                    Payment[]
+  chatMessages                ChatMessage[]        @relation("ChatMessageSender")
+  replyAuthorizationsBought   ReplyAuthorization[] @relation("ReplyAuthorizationUser")
+  replyAuthorizationsReceived ReplyAuthorization[] @relation("ReplyAuthorizationCreator")
 
   @@index([email])
   @@index([role])
@@ -51,14 +53,15 @@ model CreatorProfile {
 }
 
 model Conversation {
-  id        String        @id @default(uuid())
-  userId    String
-  creatorId String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  messages  ChatMessage[]
-  creator   User          @relation("CreatorConversations", fields: [creatorId], references: [id], onDelete: Cascade)
-  user      User          @relation("UserConversations", fields: [userId], references: [id], onDelete: Cascade)
+  id                  String               @id @default(uuid())
+  userId              String
+  creatorId           String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  messages            ChatMessage[]
+  creator             User                 @relation("CreatorConversations", fields: [creatorId], references: [id], onDelete: Cascade)
+  user                User                 @relation("UserConversations", fields: [userId], references: [id], onDelete: Cascade)
+  replyAuthorizations ReplyAuthorization[]
 
   @@unique([userId, creatorId])
   @@index([userId])
@@ -82,6 +85,7 @@ model Message {
   creatorProfile   CreatorProfile @relation(fields: [creatorProfileId], references: [id])
   sender           User           @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   payment          Payment?
+  ChatMessage      ChatMessage[]
 
   @@index([senderId])
   @@index([creatorId])
@@ -91,20 +95,24 @@ model Message {
 }
 
 model ChatMessage {
-  id String @id @default(uuid())
-
+  id             String   @id @default(uuid())
   conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  content        String
+  createdAt      DateTime @default(now())
 
-  senderId String
-  sender   User   @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  paidMessageId    String?
+  replyToMessageId String?
 
-  content String @db.Text
-
-  createdAt DateTime @default(now())
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User          @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  replyToMessage ChatMessage?  @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies        ChatMessage[] @relation("MessageReplies")
+  paidMessage    Message?      @relation(fields: [paidMessageId], references: [id], onDelete: SetNull)
 
   @@index([conversationId])
-  @@index([senderId])
+  @@index([replyToMessageId])
+  @@index([paidMessageId])
 }
 
 model Payment {
@@ -136,6 +144,37 @@ model CreatorEarning {
   creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@index([creatorId])
+}
+
+enum ReplyAuthorizationStatus {
+  PENDING
+  PROCESSING
+  AVAILABLE
+  USED
+  FAILED
+  EXPIRED
+  REFUNDED
+}
+
+model ReplyAuthorization {
+  id                    String                   @id @default(uuid())
+  conversationId        String
+  userId                String
+  creatorId             String
+  amount                Decimal                  @db.Decimal(10, 2)
+  currency              String                   @default("usd")
+  status                ReplyAuthorizationStatus @default(PENDING)
+  stripePaymentIntentId String?                  @unique
+  createdAt             DateTime                 @default(now())
+  usedAt                DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation("ReplyAuthorizationUser", fields: [userId], references: [id])
+  creator      User         @relation("ReplyAuthorizationCreator", fields: [creatorId], references: [id])
+
+  @@index([conversationId, status])
+  @@index([creatorId, status])
+  @@index([userId, status])
 }
 
 enum UserRole {

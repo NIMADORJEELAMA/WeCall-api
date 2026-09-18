@@ -464,6 +464,8 @@ export class MessagesService {
       //     conversationId: conversation.id,
       //     senderId,
       //     content: content.trim(),
+
+      //     paidMessageId: message.id,
       //   },
       // });
 
@@ -570,9 +572,9 @@ export class MessagesService {
     /**
      * Prevent duplicate replies.
      */
-    if (message.status === MessageStatus.REPLIED) {
-      throw new ConflictException('This message has already been replied to');
-    }
+    // if (message.status === MessageStatus.REPLIED) {
+    //   throw new ConflictException('This message has already been replied to');
+    // }
 
     if (message.status !== MessageStatus.AWAITING_REPLY) {
       throw new BadRequestException(
@@ -635,11 +637,25 @@ export class MessagesService {
        * This is what the user's conversation
        * history will read.
        */
+
+      const originalChatMessage = await tx.chatMessage.findFirst({
+        where: {
+          conversationId: conversation.id,
+          paidMessageId: message.id,
+          senderId: message.senderId,
+        },
+      });
+
+      if (!originalChatMessage) {
+        throw new NotFoundException('Original chat message not found');
+      }
       const chatMessage = await tx.chatMessage.create({
         data: {
           conversationId: conversation.id,
           senderId: creatorUserId,
           content: replyContent.trim(),
+
+          replyToMessageId: originalChatMessage.id,
         },
       });
 
@@ -658,6 +674,7 @@ export class MessagesService {
       return {
         updatedMessage,
         chatMessage,
+        originalChatMessage,
       };
     });
 
@@ -669,22 +686,29 @@ export class MessagesService {
      * created the paid request.
      */
     this.eventsGateway.emitToConversation(conversation.id, 'messageReplied', {
-      id: result.chatMessage.id,
-      conversationId: conversation.id,
-      content: result.chatMessage.content,
-      senderId: result.chatMessage.senderId,
-      status: result.updatedMessage.status,
-      createdAt: result.chatMessage.createdAt,
-
-      // Paid workflow information
-      paidMessageId: result.updatedMessage.id,
-      originalMessage: {
-        id: result.updatedMessage.id,
-        content: result.updatedMessage.content,
-        senderId: result.updatedMessage.senderId,
-        status: result.updatedMessage.status,
-        createdAt: result.updatedMessage.createdAt,
+      // Creator's new message
+      chatMessage: {
+        id: result.chatMessage.id,
+        conversationId: result.chatMessage.conversationId,
+        content: result.chatMessage.content,
+        senderId: result.chatMessage.senderId,
+        createdAt: result.chatMessage.createdAt,
+        replyToMessageId: result.chatMessage.replyToMessageId,
       },
+
+      // 🔥 Exact user message being replied to
+      replyToMessage: {
+        id: result.originalChatMessage.id,
+        conversationId: result.originalChatMessage.conversationId,
+        content: result.originalChatMessage.content,
+        senderId: result.originalChatMessage.senderId,
+        createdAt: result.originalChatMessage.createdAt,
+      },
+
+      // Payment workflow ID
+      paidMessageId: result.updatedMessage.id,
+
+      status: result.updatedMessage.status,
     });
     // this.eventsGateway.emitToUser(
     //   result.updatedMessage.senderId,
@@ -757,9 +781,11 @@ export class MessagesService {
       where: {
         conversationId,
       },
+
       orderBy: {
         createdAt: 'asc',
       },
+
       include: {
         sender: {
           select: {
@@ -768,9 +794,17 @@ export class MessagesService {
             avatarUrl: true,
           },
         },
+
+        replyToMessage: {
+          select: {
+            id: true,
+            content: true,
+            senderId: true,
+            createdAt: true,
+          },
+        },
       },
     });
-
     return {
       conversationId: conversation.id,
       userId: conversation.userId,

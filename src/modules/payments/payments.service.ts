@@ -306,6 +306,8 @@ export class PaymentsService {
           conversationId: conversation.id,
           senderId: message.senderId,
           content: message.content,
+
+          paidMessageId: message.id,
         },
       });
 
