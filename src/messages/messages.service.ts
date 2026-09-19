@@ -183,25 +183,27 @@ export class MessagesService {
       };
     }
 
-    const messages = await this.prisma.chatMessage.findMany({
-      where: {
-        conversationId: conversation.id,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-      select: {
-        id: true,
-        conversationId: true,
-        senderId: true,
-        content: true,
-        createdAt: true,
-      },
-    });
+    // const messages = await this.prisma.chatMessage.findMany({
+    //   where: {
+    //     conversationId: conversation.id,
+    //   },
+    //   orderBy: {
+    //     createdAt: 'asc',
+    //   },
+    //   select: {
+    //     id: true,
+    //     conversationId: true,
+    //     senderId: true,
+    //     content: true,
+    //     createdAt: true,
+    //   },
+    // });
 
     return {
       conversationId: conversation.id,
-      messages,
+      // messages,
+      userId: conversation.userId,
+      creatorId: conversation.creatorId,
     };
   }
   async getMyConversations(userId: string) {
@@ -760,7 +762,12 @@ export class MessagesService {
    * Get all chat messages for a conversation.
    * The authenticated user must be a member of the conversation.
    */
-  async getConversationMessages(userId: string, conversationId: string) {
+  async getConversationMessages(
+    userId: string,
+    conversationId: string,
+    cursor?: string,
+    limit = 30,
+  ) {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
@@ -772,19 +779,41 @@ export class MessagesService {
         creatorId: true,
       },
     });
-
+    console.log('========== CONVERSATION DEBUG ==========');
+    console.log('Authenticated userId:', userId);
+    console.log('Requested conversationId:', conversationId);
+    console.log('Conversation:', conversation);
+    console.log('========================================');
     if (!conversation) {
       throw new ForbiddenException('You are not a member of this conversation');
     }
+
+    const take = Math.min(Math.max(limit, 1), 50);
 
     const messages = await this.prisma.chatMessage.findMany({
       where: {
         conversationId,
       },
 
-      orderBy: {
-        createdAt: 'asc',
-      },
+      orderBy: [
+        {
+          createdAt: 'desc',
+        },
+        {
+          id: 'desc',
+        },
+      ],
+
+      take: take + 1,
+
+      ...(cursor
+        ? {
+            cursor: {
+              id: cursor,
+            },
+            skip: 1,
+          }
+        : {}),
 
       include: {
         sender: {
@@ -805,11 +834,29 @@ export class MessagesService {
         },
       },
     });
+
+    const hasMore = messages.length > take;
+
+    if (hasMore) {
+      messages.pop();
+    }
+
+    // API returns messages oldest -> newest
+    messages.reverse();
+
     return {
       conversationId: conversation.id,
       userId: conversation.userId,
       creatorId: conversation.creatorId,
+
       messages,
+
+      pagination: {
+        limit: take,
+        hasMore,
+
+        nextCursor: hasMore ? (messages[0]?.id ?? null) : null,
+      },
     };
   }
   /**
