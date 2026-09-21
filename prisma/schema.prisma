@@ -196,7 +196,6 @@ enum CreatorStatus {
 
 enum MessageStatus {
   PENDING_PAYMENT
-  PAID
   AWAITING_REPLY
   REPLIED
   DECLINED
