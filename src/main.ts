@@ -2,10 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import 'reflect-metadata';
 import * as express from 'express';
+import cookieParser from 'cookie-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });
+
+  app.use(cookieParser());
   // const app = await NestFactory.create(AppModule);
   // app.use(express.json());
   // app.use(express.urlencoded({ extended: true }));
