@@ -1,7 +1,5 @@
-// // src/notifications/firebase.service.ts
 // import { Injectable, OnModuleInit } from '@nestjs/common';
 // import * as admin from 'firebase-admin';
-
 // import serviceAccount from '../notifications/service-account.json';
 
 // @Injectable()
@@ -11,7 +9,7 @@
 //       try {
 //         admin.initializeApp({
 //           credential: admin.credential.cert(
-//             serviceAccount as admin.ServiceAccount, // <--- Add 'as admin.ServiceAccount'
+//             serviceAccount as admin.ServiceAccount,
 //           ),
 //         });
 //         console.log('🔥 Firebase Admin: Connection Successful');
@@ -20,6 +18,7 @@
 //       }
 //     }
 //   }
+
 //   async sendPush(
 //     token: string,
 //     title: string,
@@ -28,7 +27,7 @@
 //   ) {
 //     if (!token) return;
 
-//     // Convert all data values to strings to prevent FCM errors
+//     // FCM requires all data values to be strings
 //     const stringData: Record<string, string> = {};
 //     if (data) {
 //       Object.keys(data).forEach((key) => {
@@ -40,8 +39,26 @@
 //       const response = await admin.messaging().send({
 //         notification: { title, body },
 //         data: stringData,
+//         // ADD THIS BLOCK FOR SOUND & CHANNELS
+//         android: {
+//           priority: 'high',
+//           notification: {
+//             channelId: 'kitchen_alerts', // Must match Notifee channel ID
+//             sound: 'notification', // Must match res/raw/notification.mp3
+//             clickAction: 'fcm.ACTION.EVENT', // Standard for background clicks
+//           },
+//         },
+//         // ADD THIS FOR iOS SOUND
+//         apns: {
+//           payload: {
+//             aps: {
+//               sound: 'notification.wav',
+//             },
+//           },
+//         },
 //         token,
 //       });
+
 //       console.log('🚀 Notification sent successfully:', response);
 //       return response;
 //     } catch (error) {
@@ -49,34 +66,51 @@
 //         error.code === 'messaging/registration-token-not-registered' ||
 //         error.code === 'messaging/invalid-registration-token'
 //       ) {
-//         console.warn(
-//           '🗑️ Dead token detected. Recommendation: Clear this from DB.',
-//         );
+//         console.warn('🗑️ Dead token detected.');
 //       }
 //       console.error('❌ FCM Send Error:', error.message);
 //     }
 //   }
 // }
 
-// src/notifications/firebase.service.ts
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import serviceAccount from '../notifications/service-account.json';
 
 @Injectable()
 export class FirebaseService implements OnModuleInit {
   onModuleInit() {
-    if (admin.apps.length === 0) {
-      try {
-        admin.initializeApp({
-          credential: admin.credential.cert(
-            serviceAccount as admin.ServiceAccount,
-          ),
-        });
-        console.log('🔥 Firebase Admin: Connection Successful');
-      } catch (error) {
-        console.error('❌ Firebase Admin Initialization Failed', error.message);
+    if (admin.apps.length > 0) {
+      return;
+    }
+
+    try {
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(
+        /\\n/g,
+        '\n',
+      );
+
+      if (!projectId || !clientEmail || !privateKey) {
+        throw new Error(
+          'Missing Firebase environment variables: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY',
+        );
       }
+
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+      });
+
+      console.log('🔥 Firebase Admin: Connection Successful');
+    } catch (error) {
+      console.error(
+        '❌ Firebase Admin Initialization Failed:',
+        error instanceof Error ? error.message : error,
+      );
     }
   }
 
@@ -88,8 +122,8 @@ export class FirebaseService implements OnModuleInit {
   ) {
     if (!token) return;
 
-    // FCM requires all data values to be strings
     const stringData: Record<string, string> = {};
+
     if (data) {
       Object.keys(data).forEach((key) => {
         stringData[key] = String(data[key]);
@@ -98,18 +132,22 @@ export class FirebaseService implements OnModuleInit {
 
     try {
       const response = await admin.messaging().send({
-        notification: { title, body },
+        notification: {
+          title,
+          body,
+        },
+
         data: stringData,
-        // ADD THIS BLOCK FOR SOUND & CHANNELS
+
         android: {
           priority: 'high',
           notification: {
-            channelId: 'kitchen_alerts', // Must match Notifee channel ID
-            sound: 'notification', // Must match res/raw/notification.mp3
-            clickAction: 'fcm.ACTION.EVENT', // Standard for background clicks
+            channelId: 'kitchen_alerts',
+            sound: 'notification',
+            clickAction: 'fcm.ACTION.EVENT',
           },
         },
-        // ADD THIS FOR iOS SOUND
+
         apns: {
           payload: {
             aps: {
@@ -117,19 +155,22 @@ export class FirebaseService implements OnModuleInit {
             },
           },
         },
+
         token,
       });
 
       console.log('🚀 Notification sent successfully:', response);
+
       return response;
-    } catch (error) {
+    } catch (error: any) {
       if (
-        error.code === 'messaging/registration-token-not-registered' ||
-        error.code === 'messaging/invalid-registration-token'
+        error?.code === 'messaging/registration-token-not-registered' ||
+        error?.code === 'messaging/invalid-registration-token'
       ) {
         console.warn('🗑️ Dead token detected.');
       }
-      console.error('❌ FCM Send Error:', error.message);
+
+      console.error('❌ FCM Send Error:', error?.message || error);
     }
   }
 }
