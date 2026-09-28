@@ -22,7 +22,7 @@ import { CreatorsModule } from './creators/creators.module';
     MessagesModule,
     AdminModule,
     PaymentsModule,
-    QzModule,
+    // QzModule,
   ],
   controllers: [AdminController],
 })
