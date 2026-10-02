@@ -8,6 +8,7 @@ import {
   Patch,
   UseGuards,
   Request,
+  Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -39,6 +40,22 @@ export class UsersController {
     console.log('Sending to service - ID:', userId, 'Token:', token);
     return this.usersService.updateFcmToken(userId, token);
   }
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  getProfile(@Req() req) {
+    const userId = req.user.userId;
+
+    console.log('PROFILE USER ID:', userId);
+
+    return this.usersService.getProfile(userId);
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(@Req() req, @Body() dto: UpdateUserDto) {
+    return this.usersService.updateProfile(req.user.userId, dto);
+  }
+
   @Patch(':id')
   @Roles(UserRole.ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -50,6 +67,7 @@ export class UsersController {
   remove(@Param('id') id: string) {
     return this.usersService.deleteUser(id);
   }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   findOne(@Param('id') id: string) {

@@ -15,7 +15,97 @@ export class UsersService {
   create(data: any) {
     return this.prisma.user.create({ data });
   }
+  async updateProfile(userId: string, dto: UpdateUserDto) {
+    const { password, creatorProfile, ...userData } = dto;
 
+    const updateData: any = {
+      ...userData,
+    };
+
+    // Hash password only when provided
+    if (password && password.trim().length > 0) {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    try {
+      // First check the user and their creator profile
+      const existingUser = await this.prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        include: {
+          creatorProfile: true,
+        },
+      });
+
+      if (!existingUser) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+
+      // Update User + CreatorProfile together
+      const user = await this.prisma.user.update({
+        where: {
+          id: userId,
+        },
+
+        data: {
+          ...updateData,
+
+          ...(creatorProfile &&
+            existingUser.role === 'CREATOR' && {
+              creatorProfile: existingUser.creatorProfile
+                ? {
+                    update: {
+                      ...(creatorProfile.username !== undefined && {
+                        username: creatorProfile.username,
+                      }),
+
+                      ...(creatorProfile.replyPrice !== undefined && {
+                        replyPrice: creatorProfile.replyPrice,
+                      }),
+                    },
+                  }
+                : {
+                    create: {
+                      username:
+                        creatorProfile.username ||
+                        existingUser.name.toLowerCase().replace(/\s+/g, '') +
+                          Math.floor(Math.random() * 10000),
+
+                      replyPrice: creatorProfile.replyPrice ?? 5,
+                    },
+                  },
+            }),
+        },
+
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          status: true,
+          avatarUrl: true,
+          createdAt: true,
+
+          creatorProfile: {
+            select: {
+              id: true,
+              username: true,
+              replyPrice: true,
+            },
+          },
+        },
+      });
+
+      return user;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      throw error;
+    }
+  }
   async update(id: string, dto: UpdateUserDto) {
     // 1. Create a clean data object
     const { password, ...otherData } = dto;
@@ -127,5 +217,36 @@ export class UsersService {
         totalPayments: user._count.payments,
       },
     };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        status: true,
+        avatarUrl: true,
+        createdAt: true,
+
+        creatorProfile: {
+          select: {
+            id: true,
+            username: true,
+            replyPrice: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    return user;
   }
 }

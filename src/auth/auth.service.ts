@@ -11,6 +11,7 @@ import { RegisterDto } from './dto/register.dto';
 
 // Ensure you import UserStatus and UserRole from your Prisma client
 import { UserStatus, UserRole } from '@prisma/client';
+import { access } from 'fs';
 
 @Injectable()
 export class AuthService {
@@ -53,6 +54,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         status: user.status, // Optional: useful for the frontend to know
+        access_token: this.jwtService.sign(payload), // Optional: include the token in the user object
       },
     };
   }
