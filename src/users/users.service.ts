@@ -63,6 +63,14 @@ export class UsersService {
                       ...(creatorProfile.replyPrice !== undefined && {
                         replyPrice: creatorProfile.replyPrice,
                       }),
+
+                      ...(creatorProfile.bio !== undefined && {
+                        bio: creatorProfile.bio,
+                      }),
+
+                      ...(creatorProfile.category !== undefined && {
+                        category: creatorProfile.category,
+                      }),
                     },
                   }
                 : {
@@ -73,6 +81,10 @@ export class UsersService {
                           Math.floor(Math.random() * 10000),
 
                       replyPrice: creatorProfile.replyPrice ?? 5,
+
+                      bio: creatorProfile.bio ?? null,
+
+                      category: creatorProfile.category ?? null,
                     },
                   },
             }),
@@ -92,6 +104,8 @@ export class UsersService {
               id: true,
               username: true,
               replyPrice: true,
+              bio: true,
+              category: true,
             },
           },
         },

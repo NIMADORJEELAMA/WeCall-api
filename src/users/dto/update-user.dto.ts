@@ -21,6 +21,14 @@ class UpdateCreatorProfileDto {
   @IsNumber()
   @Min(0)
   replyPrice?: number;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
 }
 
 export class UpdateUserDto {
