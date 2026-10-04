@@ -14,7 +14,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt.guard';
-
+import { AuthGuard } from '@nestjs/passport';
 interface AuthenticatedRequest extends Request {
   user: {
     userId: string;
@@ -73,5 +73,33 @@ export class AuthController {
     return {
       success: true,
     };
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  googleLogin() {
+    // Passport automatically redirects to Google
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleCallback(@Req() req: any, @Res() res: Response) {
+    console.log('========== GOOGLE CALLBACK ==========');
+    console.log('REQ.USER:', req.user);
+    console.log('ACCESS TOKEN:', req.user?.access_token);
+    console.log('USER ID:', req.user?.user?.id);
+    console.log('=====================================');
+
+    const result = req.user;
+
+    res.cookie('access_token', result.access_token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    return res.redirect('http://localhost:3001/auth/oauth-success');
   }
 }
