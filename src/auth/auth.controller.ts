@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 
 import type { Request, Response } from 'express';
-
+import { VerifyLoginOtpDto } from './dto/verify-login-otp.dto';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -29,24 +29,28 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('login')
-  async login(
-    @Body() dto: LoginDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.authService.login(dto.email, dto.password);
-
-    res.cookie('access_token', result.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 24 * 60 * 60 * 1000,
-      path: '/',
-    });
-
-    return {
-      user: result.user,
-    };
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto.email, dto.password);
   }
+  // @Post('login')
+  // async login(
+  //   @Body() dto: LoginDto,
+  //   @Res({ passthrough: true }) res: Response,
+  // ) {
+  //   const result = await this.authService.login(dto.email, dto.password);
+
+  //   res.cookie('access_token', result.access_token, {
+  //     httpOnly: true,
+  //     secure: process.env.NODE_ENV === 'production',
+  //     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+  //     maxAge: 24 * 60 * 60 * 1000,
+  //     path: '/',
+  //   });
+
+  //   return {
+  //     user: result.user,
+  //   };
+  // }
 
   @Post('register')
   register(@Body() dto: RegisterDto) {
@@ -75,6 +79,30 @@ export class AuthController {
     };
   }
 
+  @Post('verify-login-otp')
+  async verifyLoginOtp(
+    @Body() dto: VerifyLoginOtpDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyLoginOtp(dto.email, dto.otp);
+
+    res.cookie('access_token', result.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    return {
+      user: result.user,
+    };
+  }
+
+  @Post('verify-signup-otp')
+  async verifySignupOtp(@Body() dto: VerifyLoginOtpDto) {
+    return this.authService.verifySignupOtp(dto.email, dto.otp);
+  }
   @Get('google')
   @UseGuards(AuthGuard('google'))
   googleLogin() {

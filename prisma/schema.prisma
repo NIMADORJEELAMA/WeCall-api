@@ -11,6 +11,22 @@ enum AuthProvider {
   GOOGLE
 }
 
+enum OtpPurpose {
+  SIGNUP
+  LOGIN
+}
+model EmailOtp {
+  id        String     @id @default(uuid())
+  email     String
+  codeHash  String
+  purpose OtpPurpose @default(SIGNUP)
+  expiresAt DateTime
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  @@index([email])
+  @@index([email, purpose])
+}
 model AuthAccount {
   id                String       @id @default(uuid())
   userId            String
@@ -28,6 +44,7 @@ model User {
   id                          String               @id @default(uuid())
   name                        String
   email                       String               @unique
+  emailVerified Boolean    @default(false)
   authAccounts                AuthAccount[]
   password                    String?
   role                        UserRole             @default(USER)
